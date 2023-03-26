@@ -1,0 +1,66 @@
+name: Continuous Integration
+
+on: [ push, pull_request ]
+
+jobs:
+  tests:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          coverage: xdebug
+          extensions: intl, gd
+          tools: psalm:4.30, phpcs:3.7, phpunit:9.6, composer:v2
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate composer config
+        run: composer validate
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: |
+          echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer Dependencies
+        uses: actions/cache@v2
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install Composer dependencies
+        if: steps.composer-cache.outputs.cache-hit != 'true'
+        uses: php-actions/composer@v6
+        with:
+          php_version: "8.2.1"
+          version: 2
+          args: --ignore-platform-reqs --no-suggest --no-scripts
+        env:
+          ACTION_PHP_VERSION: 8.2.1
+
+      - name: Run code styling with PHPCS
+        run: phpcs
+
+      - name: Run header checks with DocHeader
+        run: ./vendor/bin/docheader check src/ test/
+
+      - name: Run static code analysis with psalm
+        run: psalm --config=psalm.xml
+
+      - name: Run unit tests with PHPUnit
+        run: phpunit --coverage-clover build/logs/clover.xml
+        env:
+          XDEBUG_MODE: coverage
+
+#      - name: Run coverage
+#        run: ./vendor/bin/php-coveralls --coverage_clover=build/logs/clover.xml -v
+#        env:
+#          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
