@@ -19,7 +19,8 @@
   "require": {
     "php": "^8.2",
     "phayne-io/php-event-store": "^1.0@dev",
-    "ext-pdo": "*"
+    "ext-pdo": "*",
+    "ext-pcntl": "*"
   },
   "require-dev": {
     "dg/bypass-finals": "^1.4",
@@ -37,7 +38,8 @@
   },
   "autoload-dev": {
     "psr-4": {
-      "PhayneTest\\EventStore\\Pdo\\": "test/"
+      "PhayneTest\\EventStore\\Pdo\\": "test/",
+      "PhayneTest\\EventStore\\": "vendor/phayne-io/php-event-store/test/"
     }
   },
   "scripts": {
@@ -45,7 +47,8 @@
     "test-clover": "XDEBUG_MODE=coverage phpunit --colors=always -vvv --coverage-clover build/logs/clover.xml",
     "static": "./vendor/bin/psalm --config=psalm.xml",
     "style": "./vendor/bin/phpcs",
-    "test": ["@test-html", "@static", "@style"]
+    "test": ["@test-html", "@static", "@style"],
+    "test-postgres": "DB_HOST=postgres vendor/bin/phpunit -c phpunit.postgres.xml"
   },
   "extra": {
     "branch-alias": {
