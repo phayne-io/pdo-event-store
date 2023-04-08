@@ -48,7 +48,9 @@
     "static": "./vendor/bin/psalm --config=psalm.xml",
     "style": "./vendor/bin/phpcs",
     "test": ["@test-html", "@static", "@style"],
-    "test-postgres": "DB_HOST=postgres vendor/bin/phpunit -c phpunit.postgres.xml"
+    "test-postgres": "DB_HOST=postgres vendor/bin/phpunit -c phpunit.postgres.xml",
+    "test-mysql": "DB_HOST=mysql vendor/bin/phpunit -c phpunit.mysql.xml",
+    "test-mariadb": "DB_HOST=mariadb vendor/bin/phpunit -c phpunit.mariadb.xml"
   },
   "extra": {
     "branch-alias": {

@@ -542,9 +542,16 @@ EOT;
 
             $this->currentStreamName = $events->streamName();
 
-            if ($this->gapDetection
-                && $this->gapDetection->isGapInStreamPosition((int) $this->streamPositions[$this->currentStreamName], (int) $key)
-                && $this->gapDetection->shouldRetryToFillGap(new \DateTimeImmutable('now', new DateTimeZone('UTC')), $event)
+            if (
+                $this->gapDetection
+                && $this->gapDetection->isGapInStreamPosition(
+                    (int)$this->streamPositions[$this->currentStreamName],
+                    (int)$key
+                )
+                && $this->gapDetection->shouldRetryToFillGap(
+                    new DateTimeImmutable('now', new DateTimeZone('UTC')),
+                    $event
+                )
             ) {
                 return false;
             }

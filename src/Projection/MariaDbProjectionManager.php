@@ -1,4 +1,5 @@
 <?php
+//phpcs:ignorefile
 
 /**
  * This file is part of phayne-io/pdo-event-store package.
@@ -19,9 +20,8 @@ use Phayne\EventStore\EventStore;
 use Phayne\EventStore\EventStoreDecorator;
 use Phayne\EventStore\Exception\ProjectionNotFound;
 use Phayne\EventStore\Pdo\Exception\RuntimeException;
-use Phayne\EventStore\Pdo\PostgresEventStore;
+use Phayne\EventStore\Pdo\MariaDbEventStore;
 use Phayne\EventStore\Pdo\Util\Json;
-use Phayne\EventStore\Pdo\Util\PostgresHelper;
 use Phayne\EventStore\Projection\ProjectionManager;
 use Phayne\EventStore\Projection\ProjectionStatus;
 use Phayne\EventStore\Projection\Projector;
@@ -31,27 +31,28 @@ use Phayne\EventStore\Projection\ReadModelProjector;
 use Phayne\Exception\InvalidArgumentException;
 use Phayne\Exception\OutOfBoundsException;
 
+use function preg_match;
+use function sprintf;
+
 /**
- * Class PostgresProjectionManager
+ * Class MariaDbProjectionManager
  *
  * @package Phayne\EventStore\Pdo\Projection
  * @author Julien Guittard <julien@phayne.com>
  */
-class PostgresProjectionManager implements ProjectionManager
+final readonly class MariaDbProjectionManager implements ProjectionManager
 {
-    use PostgresHelper;
-
     public function __construct(
-        private readonly EventStore $eventStore,
-        private readonly PDO $connection,
-        private readonly string $eventStreamsTable = 'event_streams',
-        private readonly string $projectionsTable = 'projections'
+        private EventStore $eventStore,
+        private PDO $connection,
+        private string $eventStreamsTable = 'event_streams',
+        private string $projectionsTable = 'projections'
     ) {
         while ($eventStore instanceof EventStoreDecorator) {
             $eventStore = $eventStore->getInnerEventStore();
         }
 
-        if (! $eventStore instanceof PostgresEventStore) {
+        if (! $eventStore instanceof MariaDbEventStore) {
             throw new InvalidArgumentException('Unknown event store instance given');
         }
     }
@@ -66,22 +67,32 @@ class PostgresProjectionManager implements ProjectionManager
         );
     }
 
-    public function createProjection(string $name, array $options = []): Projector
-    {
+    public function createProjection(
+        string $name,
+        array $options = []
+    ): Projector {
         return new PdoEventStoreProjector(
             $this->eventStore,
             $this->connection,
             $name,
             $this->eventStreamsTable,
             $this->projectionsTable,
-            $options[Projector::OPTION_LOCK_TIMEOUT_MS] ?? Projector::DEFAULT_LOCK_TIMEOUT_MS,
-            $options[Projector::OPTION_CACHE_SIZE] ?? Projector::DEFAULT_CACHE_SIZE,
-            $options[Projector::OPTION_PERSIST_BLOCK_SIZE] ?? Projector::DEFAULT_PERSIST_BLOCK_SIZE,
-            $options[Projector::OPTION_SLEEP] ?? Projector::DEFAULT_SLEEP,
-            $options[PdoEventStoreProjector::OPTION_LOAD_COUNT] ?? PdoEventStoreProjector::DEFAULT_LOAD_COUNT,
-            $options[Projector::OPTION_PCNTL_DISPATCH] ?? Projector::DEFAULT_PCNTL_DISPATCH,
-            $options[Projector::OPTION_UPDATE_LOCK_THRESHOLD] ?? Projector::DEFAULT_UPDATE_LOCK_THRESHOLD,
-            $options[PdoEventStoreProjector::OPTION_GAP_DETECTION] ?? null
+            $options[Projector::OPTION_LOCK_TIMEOUT_MS]
+                ?? Projector::DEFAULT_LOCK_TIMEOUT_MS,
+            $options[Projector::OPTION_CACHE_SIZE]
+                ?? Projector::DEFAULT_CACHE_SIZE,
+            $options[Projector::OPTION_PERSIST_BLOCK_SIZE]
+                ?? Projector::DEFAULT_PERSIST_BLOCK_SIZE,
+            $options[Projector::OPTION_SLEEP]
+                ?? Projector::DEFAULT_SLEEP,
+            $options[PdoEventStoreProjector::OPTION_LOAD_COUNT]
+                ?? PdoEventStoreProjector::DEFAULT_LOAD_COUNT,
+            $options[Projector::OPTION_PCNTL_DISPATCH]
+                ?? Projector::DEFAULT_PCNTL_DISPATCH,
+            $options[Projector::OPTION_UPDATE_LOCK_THRESHOLD]
+                ?? Projector::DEFAULT_UPDATE_LOCK_THRESHOLD,
+            $options[PdoEventStoreProjector::OPTION_GAP_DETECTION]
+                ?? null
         );
     }
 
@@ -109,21 +120,20 @@ class PostgresProjectionManager implements ProjectionManager
                 ?? ReadModelProjector::DEFAULT_PCNTL_DISPATCH,
             $options[ReadModelProjector::OPTION_UPDATE_LOCK_THRESHOLD]
                 ?? ReadModelProjector::DEFAULT_UPDATE_LOCK_THRESHOLD,
-            $options[PdoEventStoreReadModelProjector::OPTION_GAP_DETECTION] ?? null
+            $options[PdoEventStoreReadModelProjector::OPTION_GAP_DETECTION]
+                ?? null
         );
     }
 
     public function deleteProjection(string $name, bool $deleteEmittedEvents): void
     {
         $sql = <<<EOT
-UPDATE {$this->quoteIdent($this->projectionsTable)} SET status = ? WHERE name = ?;
+UPDATE `$this->projectionsTable` SET status = ? WHERE name = ? LIMIT 1;
 EOT;
 
-        if ($deleteEmittedEvents) {
-            $status = ProjectionStatus::DELETING_INCL_EMITTED_EVENTS->value;
-        } else {
-            $status = ProjectionStatus::DELETING->value;
-        }
+        $status = $deleteEmittedEvents
+            ? ProjectionStatus::DELETING_INCL_EMITTED_EVENTS->value
+            : ProjectionStatus::DELETING->value;
 
         $statement = $this->connection->prepare($sql);
         try {
@@ -139,14 +149,29 @@ EOT;
         }
 
         if (0 === $statement->rowCount()) {
-            throw ProjectionNotFound::withName($name);
+            $sql = <<<EOT
+SELECT * FROM `$this->projectionsTable` WHERE name = ? LIMIT 1;
+EOT;
+            $statement = $this->connection->prepare($sql);
+            try {
+                $statement->execute([$name]);
+            } catch (PDOException) {
+            }
+
+            if ($statement->errorCode() !== '00000') {
+                throw RuntimeException::fromStatementErrorInfo($statement->errorInfo());
+            }
+
+            if (0 === $statement->rowCount()) {
+                throw ProjectionNotFound::withName($name);
+            }
         }
     }
 
     public function resetProjection(string $name): void
     {
         $sql = <<<EOT
-UPDATE {$this->quoteIdent($this->projectionsTable)} SET status = ? WHERE name = ?;
+UPDATE `$this->projectionsTable` SET status = ? WHERE name = ? LIMIT 1;
 EOT;
 
         $statement = $this->connection->prepare($sql);
@@ -163,14 +188,29 @@ EOT;
         }
 
         if (0 === $statement->rowCount()) {
-            throw ProjectionNotFound::withName($name);
+            $sql = <<<EOT
+SELECT * FROM `$this->projectionsTable` WHERE name = ? LIMIT 1;
+EOT;
+            $statement = $this->connection->prepare($sql);
+            try {
+                $statement->execute([$name]);
+            } catch (PDOException) {
+            }
+
+            if ($statement->errorCode() !== '00000') {
+                throw RuntimeException::fromStatementErrorInfo($statement->errorInfo());
+            }
+
+            if (0 === $statement->rowCount()) {
+                throw ProjectionNotFound::withName($name);
+            }
         }
     }
 
     public function stopProjection(string $name): void
     {
         $sql = <<<EOT
-UPDATE {$this->quoteIdent($this->projectionsTable)} SET status = ? WHERE name = ?;
+UPDATE `$this->projectionsTable` SET status = ? WHERE name = ? LIMIT 1;
 EOT;
 
         $statement = $this->connection->prepare($sql);
@@ -187,7 +227,22 @@ EOT;
         }
 
         if (0 === $statement->rowCount()) {
-            throw ProjectionNotFound::withName($name);
+            $sql = <<<EOT
+SELECT * FROM `$this->projectionsTable` WHERE name = ? LIMIT 1;
+EOT;
+            $statement = $this->connection->prepare($sql);
+            try {
+                $statement->execute([$name]);
+            } catch (PDOException) {
+            }
+
+            if ($statement->errorCode() !== '00000') {
+                throw RuntimeException::fromStatementErrorInfo($statement->errorInfo());
+            }
+
+            if (0 === $statement->rowCount()) {
+                throw ProjectionNotFound::withName($name);
+            }
         }
     }
 
@@ -213,14 +268,14 @@ EOT;
         if (null !== $filter) {
             $values[':filter'] = $filter;
 
-            $whereCondition = 'WHERE name = :filter';
+            $whereCondition = 'WHERE `name` = :filter';
         }
 
         $query = <<<SQL
-SELECT name FROM {$this->quoteIdent($this->projectionsTable)}
+SELECT `name` FROM `$this->projectionsTable`
 $whereCondition
-ORDER BY name ASC
-LIMIT $limit OFFSET $offset
+ORDER BY `name` ASC
+LIMIT $offset, $limit
 SQL;
 
         $statement = $this->connection->prepare($query);
@@ -266,14 +321,21 @@ SQL;
             ));
         }
 
+        if (empty($regex) || false === @preg_match("/$regex/", '')) {
+            throw new InvalidArgumentException('Invalid regex pattern given');
+        }
+
+        $values = [];
+
         $values[':filter'] = $regex;
 
-        $whereCondition = 'WHERE name ~ :filter';
+        $whereCondition = 'WHERE `name` REGEXP :filter';
+
         $query = <<<SQL
-SELECT name FROM {$this->quoteIdent($this->projectionsTable)}
+SELECT `name` FROM `$this->projectionsTable`
 $whereCondition
-ORDER BY name ASC
-LIMIT $limit OFFSET $offset
+ORDER BY `name` ASC
+LIMIT $offset, $limit
 SQL;
 
         $statement = $this->connection->prepare($query);
@@ -283,9 +345,7 @@ SQL;
         } catch (PDOException) {
         }
 
-        if ($statement->errorCode() === '2201B') {
-            throw new InvalidArgumentException('Invalid regex pattern given');
-        } elseif ($statement->errorCode() !== '00000') {
+        if ($statement->errorCode() !== '00000') {
             $errorCode = $statement->errorCode();
             $errorInfo = $statement->errorInfo()[2];
 
@@ -308,8 +368,8 @@ SQL;
     public function fetchProjectionStatus(string $name): ProjectionStatus
     {
         $query = <<<SQL
-SELECT status FROM {$this->quoteIdent($this->projectionsTable)}
-WHERE name = ?
+SELECT `status` FROM `$this->projectionsTable`
+WHERE `name` = ?
 LIMIT 1
 SQL;
 
@@ -317,8 +377,7 @@ SQL;
         $statement->setFetchMode(PDO::FETCH_OBJ);
         try {
             $statement->execute([$name]);
-        } catch (PDOException $exception) {
-            // ignore and check error code
+        } catch (PDOException) {
         }
 
         if ($statement->errorCode() !== '00000') {
@@ -337,8 +396,8 @@ SQL;
     public function fetchProjectionStreamPositions(string $name): array
     {
         $query = <<<SQL
-SELECT position FROM {$this->quoteIdent($this->projectionsTable)}
-WHERE name = ?
+SELECT `position` FROM `$this->projectionsTable`
+WHERE `name` = ?
 LIMIT 1
 SQL;
 
@@ -365,8 +424,8 @@ SQL;
     public function fetchProjectionState(string $name): array
     {
         $query = <<<SQL
-SELECT state FROM {$this->quoteIdent($this->projectionsTable)}
-WHERE name = ?
+SELECT `state` FROM `$this->projectionsTable`
+WHERE `name` = ?
 LIMIT 1
 SQL;
 

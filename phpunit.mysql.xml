@@ -21,14 +21,21 @@
             <directory>./src/</directory>
         </include>
         <exclude>
+            <file>./src/Container/MariaDbEventStoreFactory.php</file>
+            <file>./src/Container/MariaDbProjectionManagerFactory.php</file>
             <file>./src/MariaDbEventStore.php</file>
-            <file>./src/Container/MySqlEventStoreFactory.php</file>
-            <file>./src/Container/MySqlProjectionManagerFactory.php</file>
-            <file>./src/PersistenceStrategy/MySqlAggregateStreamStrategy.php</file>
-            <file>./src/PersistenceStrategy/MySqlSimpleStreamStrategy.php</file>
-            <file>./src/PersistenceStrategy/MySqlSingleStreamStrategy.php</file>
-            <file>./src/Projection/MySqlProjectionManager.php</file>
-            <file>./src/MySqlEventStore.php</file>
+            <file>./src/PersistenceStrategy/MariaDbAggregateStreamStrategy.php</file>
+            <file>./src/PersistenceStrategy/MariaDbSimpleStreamStrategy.php</file>
+            <file>./src/PersistenceStrategy/MariaDbSingleStreamStrategy.php</file>
+            <file>./src/Projection/MariaDbProjectionManager.php</file>
+            <file>./src/MariaDbEventStore.php</file>
+            <file>./src/Container/PostgresEventStoreFactory.php</file>
+            <file>./src/Container/PostgresProjectionManagerFactory.php</file>
+            <file>./src/PersistenceStrategy/PostgresAggregateStreamStrategy.php</file>
+            <file>./src/PersistenceStrategy/PostgresSimpleStreamStrategy.php</file>
+            <file>./src/PersistenceStrategy/PostgresSingleStreamStrategy.php</file>
+            <file>./src/Projection/PostgresProjectionManager.php</file>
+            <file>./src/PostgresEventStore.php</file>
         </exclude>
     </coverage>
     <testsuite name="Phayne PDO EventStore Test Suite">
@@ -37,17 +44,17 @@
     <groups>
         <exclude>
             <group>mariadb</group>
-            <group>mysql</group>
+            <group>postgres</group>
         </exclude>
     </groups>
     <php>
-        <env name="DB" value="postgres"/>
-        <env name="DB_DRIVER" value="pdo_pgsql"/>
-        <env name="DB_HOST" value="localhost"/>
-        <env name="DB_USERNAME" value="postgres"/>
+        <env name="DB" value="mysql"/>
+        <env name="DB_DRIVER" value="pdo_mysql"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_USERNAME" value="root"/>
         <env name="DB_PASSWORD" value=""/>
         <env name="DB_NAME" value="event_store_tests"/>
-        <env name="DB_PORT" value="5432"/>
+        <env name="DB_PORT" value="3306"/>
         <env name="DB_CHARSET" value="utf8"/>
         <!-- \PDO::ERRMODE_SILENT -->
         <env name="DB_ATTR_ERRMODE" value="0"/>
