@@ -22,8 +22,8 @@ jobs:
       postgres:
         image: postgres:12
         env:
-          - POSTGRES_DB=event_store_tests
-          - POSTGRES_HOST_AUTH_METHOD=trust
+          POSTGRES_DB: event_store_tests
+          POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
