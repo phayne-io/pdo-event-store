@@ -6,6 +6,32 @@ jobs:
   tests:
     name: Run tests
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD:
+          MYSQL_DATABASE: event_store_tests
+        options: >-
+          --health-cmd "mysqladmin ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+        ports:
+          - 3306:3306
+      postgres:
+        image: postgres:12
+        env:
+          - POSTGRES_DB=event_store_tests
+          - POSTGRES_HOST_AUTH_METHOD=trust
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -56,11 +82,11 @@ jobs:
         run: psalm --config=psalm.xml
 
       - name: Run Postgres unit tests with PHPUnit
-        run: DB_HOST=postgres phpunit -c phpunit.postgres.xml --coverage-clover build/logs/clover.xml
+        run: DB_HOST=localhost phpunit -c phpunit.postgres.xml --coverage-clover build/logs/clover.xml
         env:
           XDEBUG_MODE: coverage
 
       - name: Run MySQL unit tests with PHPUnit
-        run: DB_HOST=mysql phpunit -c phpunit.mysql.xml --coverage-clover build/logs/clover.xml
+        run: DB_HOST=localhost phpunit -c phpunit.mysql.xml --coverage-clover build/logs/clover.xml
         env:
           XDEBUG_MODE: coverage
